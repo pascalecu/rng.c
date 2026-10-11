@@ -12,12 +12,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <string.h>
+
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #ifndef BENCH_CALLS
 #define BENCH_CALLS 100000000
 #endif
 
 #ifndef BENCH_RUNS
-#define BENCH_RUNS 20
+#define BENCH_RUNS 24
 #endif
 
 #ifndef BENCH_WARMUP
@@ -40,11 +48,21 @@
 #define BENCH_HIST_COLS 10
 #endif
 
+#ifndef BENCH_PROGRESS
+#define BENCH_PROGRESS 1
+#endif
+
+#ifndef BENCH_PROGRESS_WIDTH
+#define BENCH_PROGRESS_WIDTH 30
+#endif
+
 _Static_assert(BENCH_CALLS > 0, "BENCH_CALLS must be positive");
 _Static_assert(BENCH_RUNS > 0, "BENCH_RUNS must be positive");
 _Static_assert(BENCH_WARMUP >= 0, "BENCH_WARMUP must be nonnegative");
 _Static_assert(BENCH_HIST_ROWS >= 0, "BENCH_HIST_ROWS must be nonnegative");
 _Static_assert(BENCH_HIST_COLS >= 0, "BENCH_HIST_COLS must be nonnegative");
+_Static_assert(BENCH_PROGRESS_WIDTH > 0 && BENCH_PROGRESS_WIDTH <= 80,
+               "BENCH_PROGRESS_WIDTH must be between 1 and 80");
 
 #if BENCH_CALLS > SIZE_MAX || BENCH_RUNS > SIZE_MAX || BENCH_WARMUP > SIZE_MAX
 #error "Benchmark counts must fit in size_t"
@@ -182,7 +200,7 @@ static void plot_times(const benchmark *entry, const benchmark_result *result,
     }
   }
 
-  printf("\n%s: %.3f–%.3f ns/value, %zu runs\n", entry->name,
+  printf("\n%s: %.3f to %.3f ns/value, %zu runs\n", entry->name,
          (double)minimum / (double)BENCH_CALLS,
          (double)maximum / (double)BENCH_CALLS, runs);
 
@@ -230,36 +248,57 @@ static int write_csv(const char *path, const benchmark *entries,
   return EXIT_SUCCESS;
 }
 
-static void print_progress(size_t completed, size_t total) {
-  const size_t width = 30;
+static int stderr_is_terminal(void) {
+#ifdef _WIN32
+  return _isatty(_fileno(stderr)) != 0;
+#else
+  return isatty(fileno(stderr)) != 0;
+#endif
+}
+
+static void print_progress(size_t completed, size_t total, int enabled) {
+  if (!enabled || total == 0) {
+    return;
+  }
+
+  if (completed > total) {
+    completed = total;
+  }
+
+  const size_t width = BENCH_PROGRESS_WIDTH;
   const double fraction = (double)completed / (double)total;
   const size_t half_blocks = (size_t)(fraction * (double)(width * 2));
   const size_t full_blocks = half_blocks / 2;
   const int has_half = half_blocks % 2 != 0;
 
-  fputs("\r[", stderr);
+  /* Each UTF-8 block occupies three bytes, but one terminal column. */
+  char bar[BENCH_PROGRESS_WIDTH * 3 + 1];
+  char *cursor = bar;
 
   for (size_t i = 0; i < width; ++i) {
     if (i < full_blocks) {
-      fputs("\u2588", stderr);
+      memcpy(cursor, u8"\u2588", 3);
+      cursor += 3;
     } else if (i == full_blocks && has_half) {
-      fputs("\u258c", stderr);
+      memcpy(cursor, u8"\u258c", 3);
+      cursor += 3;
     } else {
-      fputc(' ', stderr);
+      *cursor++ = ' ';
     }
   }
 
-  fprintf(stderr, "] %5.1f%% (%zu/%zu rounds)",
-          fraction * 100.0, completed, total);
+  *cursor = '\0';
 
-  if (completed == total) {
-    fputc('\n', stderr);
-  }
-
+  fprintf(stderr, "\r[%s] %5.1f%% (%zu/%zu rounds)%s", bar, fraction * 100.0,
+          completed, total, completed == total ? "\n" : "");
   fflush(stderr);
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+  SetConsoleOutputCP(CP_UTF8);
+#endif
+
   const benchmark benchmarks[] = {
       {"rand", bench_rand, seed_rand},
 #ifndef _WIN32
@@ -302,9 +341,11 @@ int main(int argc, char **argv) {
     results[i].checksum = benchmarks[i].generate((size_t)BENCH_WARMUP);
   }
 
+  const int show_progress = BENCH_PROGRESS && stderr_is_terminal();
+
   fprintf(stderr, "Measuring %zu rounds...\n", runs);
   fflush(stderr);
-  print_progress(0, runs);
+  print_progress(0, runs, show_progress);
 
   /* Rotate the first generator to distribute execution positions. */
   for (size_t run = 0; run < runs; ++run) {
@@ -325,7 +366,7 @@ int main(int argc, char **argv) {
     }
 
     /* Update progress only after every generator has finished the round. */
-    print_progress(run + 1, runs);
+    print_progress(run + 1, runs, show_progress);
   }
 
   printf("%zu values/run | %zu runs | %zu warmup values\n", (size_t)BENCH_CALLS,

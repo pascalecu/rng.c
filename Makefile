@@ -25,6 +25,14 @@ DEPS := $(ALL_OBJS:.o=.d)
 # OPEN can be overridden, for example: make open OPEN=xdg-open.
 OPEN ?= $(if $(filter Darwin,$(shell uname -s)),open,xdg-open)
 
+ifeq ($(OS),Windows_NT)
+SHELL := cmd.exe
+.SHELLFLAGS := /d /c
+mkdir_p = if not exist "$(subst /,\,$(1))" mkdir "$(subst /,\,$(1))"
+else
+mkdir_p = mkdir -p "$(1)"
+endif
+
 all: $(BINS)
 
 run: $(BIN)/main
@@ -50,11 +58,11 @@ $(BIN)/rng_image: $(OBJ)/rng_image.o $(RNG_OBJS)
 $(GENERATOR): $(OBJ)/rng_zig_layers_gen.o
 
 $(BINS) $(GENERATOR):
-	@mkdir -p "$(@D)"
+	@$(call mkdir_p,$(@D))
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o "$@"
 
 $(OBJ)/%.o: $(SRC)/%.c
-	@mkdir -p "$(@D)"
+	@$(call mkdir_p,$(@D))
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c "$<" -o "$@"
 
 # Normal builds use the committed table. Only generate it if it is missing.
