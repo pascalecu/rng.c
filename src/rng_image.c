@@ -122,14 +122,16 @@ int main(int argc, char **argv) {
 
   rng_seed(IMAGE_SEED, IMAGE_STREAM);
 
-  /* Unselected pixels remain black; later updates replace earlier colours. */
+  /*
+   * Select pixels with replacement. Unselected pixels remain black, and later
+   * updates overwrite earlier colors.
+   */
   for (size_t i = 0; i < samples; ++i) {
-    const size_t pixel_ix = random_below((uint32_t)pixel_count, threshold);
-    uint8_t *pixel = &pixels[pixel_ix * RGB_CHANNELS];
-
+    const size_t index = random_below(bound, threshold);
+    uint8_t *pixel = pixels + index * RGB_CHANNELS;
     const uint32_t color = (uint32_t)RNG_FUN;
 
-    /* PPM stores red, green, and blue bytes in that order. */
+    /* Explicit RGB order, independent of host endianness. */
     pixel[0] = (uint8_t)(color >> 24);
     pixel[1] = (uint8_t)(color >> 16);
     pixel[2] = (uint8_t)(color >> 8);
@@ -138,7 +140,7 @@ int main(int argc, char **argv) {
   // Write a PPM image
   const int status =
       write_ppm(path, pixels, width, height, pixel_count * RGB_CHANNELS);
-      
+
   free(pixels);
 
   if (status == EXIT_SUCCESS) {
