@@ -80,6 +80,12 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
+  printf("%zu samples | %zu timed runs | seed %" PRIu64 " | stream %" PRIu64
+         "\n",
+         count, runs, (uint64_t)DEMO_SEED, (uint64_t)DEMO_STREAM);
+  fflush(stdout);
+
+  /* Untimed warmup before repeating the same sequence for measurement. */
   rng_seed(DEMO_SEED, DEMO_STREAM);
   fill_samples(buffer, count);
 
