@@ -1,17 +1,16 @@
 #ifndef RNG_H
 #define RNG_H
 
-
 /*
  * The PCG32 generator below is derived from PCG Random Number Generation for C
  * (https://github.com/imneme/pcg-c):
  *
- *   Copyright 2014-2019 Melissa O'Neill <oneill@pcg-random.org> and the PCG Project
- *   contributors.
+ *   Copyright 2014-2019 Melissa O'Neill <oneill@pcg-random.org> and the PCG
+ *   Project contributors.
  *
- * That code is offered under (Apache-2.0 OR MIT); it is used here under the MIT option,
- * the same license as the rest of this library. See https://www.pcg-random.org for
- * details on the generation scheme.
+ * That code is offered under (Apache-2.0 OR MIT); it is used here under the MIT
+ * option, the same license as the rest of this library. See
+ * https://www.pcg-random.org for details on the generation scheme.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -77,11 +76,42 @@ static inline uint32_t pcg32_random_r(pcg32_random_t *rng) {
   uint64_t oldstate = rng->state;
   // LCG step (pcg_setseq_64_step_r)
   rng->state = oldstate * 6364136223846793005ULL + (rng->inc | 1);
-  // XSH RR output (pcg_output_xsh_rr_64_32), fed the old state so the
-  // step and the output function can overlap
+  // XSH RR output (pcg_output_xsh_rr_64_32), fed the old state so the step and
+  // the output function can overlap
   uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   uint32_t rot = oldstate >> 59u;
   return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+}
+
+/**
+ * Generate a uniformly distributed integer in [0, bound).
+ *
+ * @param rng   Initialized generator; must not be NULL.
+ * @param bound Exclusive upper bound; must be positive.
+ *
+ * Rejection sampling avoids modulo bias and may consume multiple draws.
+ */
+static inline uint32_t rng_bounded_r(pcg32_random_t *rng, uint32_t bound) {
+  assert(bound > 0);
+
+  const uint32_t threshold = (uint32_t)(UINT32_C(0) - bound) % bound;
+
+  for (;;) {
+    const uint32_t value = pcg32_random_r(rng);
+
+    if (value >= threshold) {
+      return value % bound;
+    }
+  }
+}
+
+/**
+ * Generate a uniformly distributed integer in [0, bound).
+ *
+ * Uses the global generator. bound must be positive.
+ */
+static inline uint32_t rng_bounded(uint32_t bound) {
+  return rng_bounded_r(&pcg32_global, bound);
 }
 
 /**
@@ -94,12 +124,12 @@ static inline uint32_t rng_u(void) { return pcg32_random_r(&pcg32_global); }
 /**
  * Generate a uniform value in [0, 1).
  *
- * On binary floating-point implementations with at least 24 bits of
- * precision, the result is one of 2^24 equally spaced values:
- * k / 2^24, where 0 ≤ k < 2^24.
+ * On binary floating-point implementations with at least 24 bits of precision,
+ * the result is one of 2^24 equally spaced values: k / 2^24, where 0 ≤ k <
+ * 2^24.
  *
- * Zero is possible; one is excluded. This samples a uniform grid,
- * rather than every representable float in the interval.
+ * Zero is possible; one is excluded. This samples a uniform grid, rather than
+ * every representable float in the interval.
  *
  * Advances the global generator by one step.
  */
