@@ -102,10 +102,6 @@ int main(void) {
     }
   }
 
-  if (DEMO_HIST_ROWS > 0 && DEMO_HIST_COLS > 0) {
-    plt_hist(buffer, count, DEMO_HIST_ROWS, DEMO_HIST_COLS);
-  }
-
   double sum = 0.0;
   double minimum = buffer[0];
   double maximum = buffer[0];
@@ -113,6 +109,13 @@ int main(void) {
   // Stats for nerds
   for (size_t i = 0; i < count; ++i) {
     const double value = buffer[i];
+
+    if (!isfinite(value)) {
+      fprintf(stderr, "Nonfinite sample at index %zu: %g\n", i, value);
+      free(buffer);
+      return EXIT_FAILURE;
+    }
+
     sum += value;
 
     if (value < minimum) {
@@ -121,6 +124,10 @@ int main(void) {
     if (value > maximum) {
       maximum = value;
     }
+  }
+
+  if (DEMO_HIST_ROWS > 0 && DEMO_HIST_COLS > 0) {
+    plt_hist(buffer, count, DEMO_HIST_ROWS, DEMO_HIST_COLS);
   }
 
   const double mean = sum / (double)count;
