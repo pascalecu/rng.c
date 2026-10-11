@@ -91,12 +91,14 @@ int main(int argc, char **argv) {
   const size_t height = (size_t)HEIGHT;
   const size_t samples = (size_t)SAMPLE_COUNT;
 
-  if (height == 0 || width == 0 || width > SIZE_MAX / height) {
-    fputs("Invalid image dimensions\n", stderr);
+  /* Positive dimensions are enforced by the static assertions above. */
+  if (width > SIZE_MAX / height) {
+    fputs("Image dimensions would overflow\n", stderr);
     return EXIT_FAILURE;
   }
 
   const size_t pixel_count = width * height;
+
   if (pixel_count > SIZE_MAX / RGB_CHANNELS) {
     fputs("Image buffer size would overflow\n", stderr);
     return EXIT_FAILURE;
@@ -107,20 +109,23 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  uint8_t *pix_buffer = calloc(pixel_count, RGB_CHANNELS);
-  if (pix_buffer == NULL) {
+  const size_t bytes = pixel_count * RGB_CHANNELS;
+  uint8_t *pixels = calloc(bytes, sizeof(*pixels));
+
+  if (pixels == NULL) {
     fputs("Unable to allocate the pixel buffer\n", stderr);
     return EXIT_FAILURE;
   }
+
+  const uint32_t bound = (uint32_t)pixel_count;
+  const uint32_t threshold = (uint32_t)(UINT32_C(0) - bound) % bound;
 
   rng_seed(IMAGE_SEED, IMAGE_STREAM);
 
   /* Unselected pixels remain black; later updates replace earlier colours. */
   for (size_t i = 0; i < samples; ++i) {
-    const uint32_t threshold =
-        (UINT32_C(0) - (uint32_t)pixel_count) % (uint32_t)pixel_count;
     const size_t pixel_ix = random_below((uint32_t)pixel_count, threshold);
-    uint8_t *pixel = &pix_buffer[pixel_ix * RGB_CHANNELS];
+    uint8_t *pixel = &pixels[pixel_ix * RGB_CHANNELS];
 
     const uint32_t color = (uint32_t)RNG_FUN;
 
@@ -131,8 +136,10 @@ int main(int argc, char **argv) {
   }
 
   // Write a PPM image
-  const int status = write_ppm(path, pix_buffer, width, height, pixel_count * RGB_CHANNELS);
-  free(pix_buffer);
+  const int status =
+      write_ppm(path, pixels, width, height, pixel_count * RGB_CHANNELS);
+      
+  free(pixels);
 
   if (status == EXIT_SUCCESS) {
     printf("Wrote %zu x %zu RGB pixels to %s (%zu random pixel updates)\n",
