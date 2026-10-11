@@ -6,7 +6,7 @@
 #include "plt/plt.h"
 #include "rng/rng.h"
 #include <math.h>
-#include <stdint.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,41 +82,62 @@ int main(void) {
     }
   }
 
-  const double ns_per_sample = (double)best_time_ns / (double)count;
-
-  // Stats for nerds
-  double mean = 0.0f;
-  double x_min = buffer[0], x_max = buffer[0];
-  for (size_t i = 0; i < count; ++i) {
-    mean += buffer[i];
-
-    if (buffer[i] < x_min) {
-      x_min = buffer[i];
-    }
-    if (buffer[i] > x_max) {
-      x_max = buffer[i];
-    }
-  }
-  mean /= (double)count;
-
-  double var = 0.0f;
-  double kur = 0.0f;
-  for (size_t i = 0; i < count; ++i) {
-    double dev = (buffer[i] - mean);
-    double dev_sq = dev * dev;
-    var += dev_sq;
-    kur += dev_sq * dev_sq;
-  }
-  var /= (double)count;
-  kur /= (double)count;
-  double std = sqrtf(var);
-
   if (DEMO_HIST_ROWS > 0 && DEMO_HIST_COLS > 0) {
     plt_hist(buffer, count, DEMO_HIST_ROWS, DEMO_HIST_COLS);
   }
-  printf("range [%.1f, %.1f] | mean: %.3f | std: %.3f | kur: %.3f\n", x_min,
-         x_max, mean, std, kur - 3.0);
-  printf("sample time: %.2f ns\n", ns_per_sample);
+
+  double sum = 0.0;
+  double minimum = buffer[0];
+  double maximum = buffer[0];
+
+  // Stats for nerds
+  for (size_t i = 0; i < count; ++i) {
+    const double value = buffer[i];
+    sum += value;
+
+    if (value < minimum) {
+      minimum = value;
+    }
+    if (value > maximum) {
+      maximum = value;
+    }
+  }
+
+  const double mean = sum / (double)count;
+  double second_sum = 0.0;
+  double third_sum = 0.0;
+  double fourth_sum = 0.0;
+
+  for (size_t i = 0; i < count; ++i) {
+    const double deviation = (double)buffer[i] - mean;
+    const double squared = deviation * deviation;
+
+    second_sum += squared;
+    third_sum += squared * deviation;
+    fourth_sum += squared * squared;
+  }
+
+  const double variance = second_sum / (double)count;
+  const double stddev = sqrt(variance);
+  const double third_moment = third_sum / (double)count;
+  const double fourth_moment = fourth_sum / (double)count;
+
+  const double skewness =
+      variance > 0.0 ? third_moment / (variance * stddev) : NAN;
+  const double excess_kurtosis =
+      variance > 0.0 ? fourth_moment / (variance * variance) - 3.0 : NAN;
+
+  printf("range: [%.3f, %.3f]\n", minimum, maximum);
+  printf("mean: %.6f | stddev: %.6f\n", mean, stddev);
+  printf("skewness: %.6f | excess kurtosis: %.6f\n", skewness, excess_kurtosis);
+  puts("Standard normal targets: mean 0, stddev 1, skewness 0, excess kurtosis "
+       "0.");
+
+  const double ns_per_sample = (double)best_time_ns / (double)count;
+  const double throughput = ns_per_sample > 0.0 ? 1000.0 / ns_per_sample : NAN;
+
+  printf("best of %zu: %.3f ns/sample | %.1f million samples/s\n", runs,
+         ns_per_sample, throughput);
 
   free(buffer);
   return EXIT_SUCCESS;
