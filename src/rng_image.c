@@ -54,7 +54,7 @@ static uint32_t random_below(uint32_t bound, uint32_t threshold) {
 }
 
 static int write_ppm(const char *path, const uint8_t *pixels, size_t width,
-                     size_t height, size_t pixel_count) {
+                     size_t height, size_t bytes) {
   FILE *file = fopen(path, "wb");
   if (file == NULL) {
     perror(path);
@@ -62,12 +62,12 @@ static int write_ppm(const char *path, const uint8_t *pixels, size_t width,
   }
 
   int failed = fprintf(file, "P6\n%zu %zu\n255\n", width, height) < 0;
-  if (!failed &&
-      fwrite(pixels, RGB_CHANNELS, pixel_count, file) != pixel_count) {
+
+  if (!failed && fwrite(pixels, 1, bytes, file) != bytes) {
     failed = 1;
   }
 
-  /* Closing also checks for errors flushing buffered output. */
+  /* Buffered writes can fail during closing, too. */
   if (fclose(file) != 0) {
     failed = 1;
   }
@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
   }
 
   // Write a PPM image
-  const int status = write_ppm(path, pix_buffer, width, height, pixel_count);
+  const int status = write_ppm(path, pix_buffer, width, height, pixel_count * RGB_CHANNELS);
   free(pix_buffer);
 
   if (status == EXIT_SUCCESS) {
