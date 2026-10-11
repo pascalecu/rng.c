@@ -1,6 +1,7 @@
 #ifndef RNG_H
 #define RNG_H
 
+
 /*
  * The PCG32 generator below is derived from PCG Random Number Generation for C
  * (https://github.com/imneme/pcg-c):
@@ -17,7 +18,7 @@
 
 #include <math.h>
 #include <stdint.h>
-#include <stdlib.h>
+#include <stddef.h>
 
 #define RNG_ZIG_LAY_BITS 8
 
