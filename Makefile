@@ -1,62 +1,80 @@
-CFLAGS = -Wall -Wextra -O3
-LDFLAGS =
-LDLIBS =
+.DEFAULT_GOAL := all
+.DELETE_ON_ERROR:
 
-NAME = main
-SRC = src
-OBJ = obj
-BIN = bin
+CC ?= cc
+CPPFLAGS ?=
+CFLAGS ?= -std=c17 -O3 -Wall -Wextra
+LDFLAGS ?=
+LDLIBS ?= -lm
+DEPFLAGS ?= -MMD -MP
 
-GEN_SRCS = $(SRC)/rng/rng_zig_layers.c
+SRC := src
+OBJ := obj
+BIN := bin
 
-EXE = $(BIN)/$(NAME)
+PROGRAMS := main benchmark rng_image
+BINS := $(addprefix $(BIN)/,$(PROGRAMS))
+RNG_SRCS := $(SRC)/rng/rng.c $(SRC)/rng/rng_zig_layers.c
+RNG_OBJS := $(patsubst $(SRC)/%.c,$(OBJ)/%.o,$(RNG_SRCS))
+GEN_SRC := $(SRC)/rng/rng_zig_layers.c
+GENERATOR := $(BIN)/rng_zig_layers_gen
+ALL_OBJS := $(addprefix $(OBJ)/,$(addsuffix .o,$(PROGRAMS))) \
+            $(RNG_OBJS) $(OBJ)/plt/plt.o $(OBJ)/rng_zig_layers_gen.o
+DEPS := $(ALL_OBJS:.o=.d)
 
-BIN_SRCS = $(wildcard $(SRC)/*.c)
-LIB_SRCS = $(wildcard $(SRC)/*/*.c) $(GEN_SRCS)
-ALL_SRCS = $(BIN_SRCS) $(LIB_SRCS)
-
-LIB_OBJS = $(patsubst $(SRC)/%.c,$(OBJ)/%.o,$(LIB_SRCS))
-BINS = $(patsubst $(SRC)/%.c,$(BIN)/%,$(BIN_SRCS))
-DEPS = $(patsubst $(SRC)/%.c,$(OBJ)/%.d,$(ALL_SRCS))
+# OPEN can be overridden, for example: make open OPEN=xdg-open.
+OPEN ?= $(if $(filter Darwin,$(shell uname -s)),open,xdg-open)
 
 all: $(BINS)
 
-run: $(EXE)
-	@$(EXE)
-
-hot:
-	@find $(SRC) -type f | entr -c make run
-
-image.ppm: $(BIN)/rng_image
-	@time $<
-
-open: image.ppm
-	@open $<
+run: $(BIN)/main
+	@"$<"
 
 benchmark: $(BIN)/benchmark
-	@$<
+	@"$<"
 
-$(SRC)/rng/rng_zig_layers.c: $(BIN)/rng_zig_layers_gen
-	$< > $@
+image: image.ppm
 
-$(BIN)/rng_zig_layers_gen: $(SRC)/rng_zig_layers_gen.c $(SRC)/rng/rng.h
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $< -o $@
+image.ppm: $(BIN)/rng_image
+	@"$<"
 
-$(BIN)/%: $(OBJ)/%.o $(LIB_OBJS)
-	@mkdir -p $(@D)
-	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+open: image.ppm
+	$(OPEN) "$<"
+
+hot:
+	@find "$(SRC)" -type f | entr -c $(MAKE) run
+
+$(BIN)/main: $(OBJ)/main.o $(OBJ)/plt/plt.o $(RNG_OBJS)
+$(BIN)/benchmark: $(OBJ)/benchmark.o $(RNG_OBJS)
+$(BIN)/rng_image: $(OBJ)/rng_image.o $(RNG_OBJS)
+$(GENERATOR): $(OBJ)/rng_zig_layers_gen.o
+
+$(BINS) $(GENERATOR):
+	@mkdir -p "$(@D)"
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o "$@"
 
 $(OBJ)/%.o: $(SRC)/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $< -c -MMD -o $@
+	@mkdir -p "$(@D)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c "$<" -o "$@"
+
+# Normal builds use the committed table. Only generate it if it is missing.
+$(GEN_SRC):
+	$(MAKE) regen
+
+# Write to a temporary file so a failed generator preserves the existing table.
+regen: $(GENERATOR)
+	@set -e; tmp="$(GEN_SRC).tmp"; \
+	trap 'rm -f "$$tmp"' 0 1 2 3 15; \
+	"$(GENERATOR)" > "$$tmp"; \
+	mv "$$tmp" "$(GEN_SRC)"
 
 clean:
-	@rm -rf $(BIN) $(OBJ) *.ppm
+	$(RM) -r "$(BIN)" "$(OBJ)"
+	$(RM) image.ppm "$(GEN_SRC).tmp"
 
 clean-gen: clean
-	@rm -f $(GEN_SRCS)
+	$(RM) "$(GEN_SRC)"
 
 -include $(DEPS)
 
-.PHONY: all run hot open benchmark clean
+.PHONY: all run benchmark image open hot regen clean clean-gen
