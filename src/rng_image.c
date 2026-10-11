@@ -38,12 +38,15 @@ _Static_assert(SAMPLE_COUNT >= 0, "SAMPLE_COUNT must be nonnegative");
 #error "Image dimensions and sample count must fit in size_t"
 #endif
 
-/* bound must be positive. Reject the incomplete interval to avoid bias. */
-static uint32_t random_below(uint32_t bound) {
-  const uint32_t threshold = (UINT32_C(0) - bound) % bound;
-
+/*
+ * bound must be positive; threshold must equal 2^32 modulo bound. Rejecting
+ * values below threshold makes the accepted range divisible by bound, so every
+ * possible index has the same probability.
+ */
+static uint32_t random_below(uint32_t bound, uint32_t threshold) {
   for (;;) {
     const uint32_t value = (uint32_t)RNG_FUN;
+
     if (value >= threshold) {
       return value % bound;
     }
@@ -59,7 +62,8 @@ static int write_ppm(const char *path, const uint8_t *pixels, size_t width,
   }
 
   int failed = fprintf(file, "P6\n%zu %zu\n255\n", width, height) < 0;
-  if (!failed && fwrite(pixels, RGB_CHANNELS, pixel_count, file) != pixel_count) {
+  if (!failed &&
+      fwrite(pixels, RGB_CHANNELS, pixel_count, file) != pixel_count) {
     failed = 1;
   }
 
@@ -113,7 +117,9 @@ int main(int argc, char **argv) {
 
   /* Unselected pixels remain black; later updates replace earlier colours. */
   for (size_t i = 0; i < samples; ++i) {
-    const size_t pixel_ix = random_below((uint32_t)pixel_count);
+    const uint32_t threshold =
+        (UINT32_C(0) - (uint32_t)pixel_count) % (uint32_t)pixel_count;
+    const size_t pixel_ix = random_below((uint32_t)pixel_count, threshold);
     uint8_t *pixel = &pix_buffer[pixel_ix * RGB_CHANNELS];
 
     const uint32_t color = (uint32_t)RNG_FUN;
