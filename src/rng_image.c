@@ -12,10 +12,26 @@
 #define HEIGHT 540
 #define DEPTH 3 // RGB
 
-#define BUF_LEN (WIDTH * HEIGHT * DEPTH)
-
 int main(void) {
-  uint8_t pix_buffer[BUF_LEN] = {};
+  const size_t width = (size_t)WIDTH;
+  const size_t height = (size_t)HEIGHT;
+
+  if (height == 0 || width == 0 || width > SIZE_MAX / height) {
+    fputs("Invalid image dimensions\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  const size_t pixel_count = width * height;
+  if (pixel_count > SIZE_MAX / DEPTH) {
+    fputs("Image buffer size would overflow\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  uint8_t *pix_buffer = calloc(pixel_count, DEPTH);
+  if (pix_buffer == NULL) {
+    fputs("Unable to allocate the pixel buffer\n", stderr);
+    return EXIT_FAILURE;
+  }
 
   // Generate random pixels
   double rand_max_inv = 1.0 / (UINT32_MAX + 1.0);
@@ -23,7 +39,7 @@ int main(void) {
     uint32_t roll_a = RNG_FUN << 1;
     uint32_t roll_b = RNG_FUN << 1;
 
-    size_t pixel_ix = roll_a * rand_max_inv * WIDTH * HEIGHT;
+    size_t pixel_ix = roll_a * rand_max_inv * pixel_count;
     uint8_t *pixel = &pix_buffer[pixel_ix * DEPTH];
 
     double pixel_val = roll_b * rand_max_inv * 1.2 - 0.1;
@@ -36,14 +52,16 @@ int main(void) {
   FILE *fp = fopen("image.ppm", "wb");
   if (fp == NULL) {
     fprintf(stderr, "shit hit the fan :/");
-    return 1;
+    free(pix_buffer);
+    return EXIT_FAILURE;
   }
   fprintf(fp, "P6\n");
-  fprintf(fp, "%d %d\n", WIDTH, HEIGHT);
+  fprintf(fp, "%zu %zu\n", width, height);
   fprintf(fp, "255\n");
-  size_t pixels_written = fwrite(pix_buffer, DEPTH, WIDTH * HEIGHT, fp);
+  size_t pixels_written = fwrite(pix_buffer, DEPTH, pixel_count, fp);
   printf("Wrote %zu pixels\n", pixels_written);
   fclose(fp);
 
-  return 0;
+  free(pix_buffer);
+  return EXIT_SUCCESS;
 }
