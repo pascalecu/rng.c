@@ -45,7 +45,7 @@ hot:
 	@find "$(SRC)" -type f | entr -c $(MAKE) run
 
 $(BIN)/main: $(OBJ)/main.o $(OBJ)/plt/plt.o $(RNG_OBJS)
-$(BIN)/benchmark: $(OBJ)/benchmark.o $(RNG_OBJS)
+$(BIN)/benchmark: $(OBJ)/benchmark.o $(OBJ)/plt/plt.o $(RNG_OBJS)
 $(BIN)/rng_image: $(OBJ)/rng_image.o $(RNG_OBJS)
 $(GENERATOR): $(OBJ)/rng_zig_layers_gen.o
 
