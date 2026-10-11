@@ -18,8 +18,13 @@
 #include <math.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <assert.h>
 
 #define RNG_ZIG_LAY_BITS 8
+
+/* Bits 1-8 select the layer; bits 9-31 select the sample position. */
+_Static_assert(RNG_ZIG_LAY_BITS == 8,
+               "rng_norm's bit layout requires 256 layers");
 
 typedef struct {
   uint64_t state;
