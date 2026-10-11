@@ -6,6 +6,7 @@ CPPFLAGS ?=
 CFLAGS ?= -std=c17 -O3 -Wall -Wextra
 LDFLAGS ?=
 DEPFLAGS ?= -MMD -MP
+TEST_ARGS ?= -v
 
 # Select commands for the host shell, independently of the compiler.
 ifeq ($(OS),Windows_NT)
@@ -43,14 +44,21 @@ RNG_OBJS := $(patsubst $(SRC)/%.c,$(OBJ)/%.o,$(RNG_SRCS))
 GEN_SRC := $(SRC)/rng/rng_zig_layers.c
 GENERATOR := $(BIN)/rng_zig_layers_gen$(EXEEXT)
 
+TEST_BIN := $(BIN)/test_rng$(EXEEXT)
+TEST_OBJS := $(OBJ)/tests/test_rng.o
+
 ALL_OBJS := $(addprefix $(OBJ)/,$(addsuffix .o,$(PROGRAMS))) \
-            $(RNG_OBJS) $(OBJ)/plt/plt.o $(OBJ)/rng_zig_layers_gen.o
+            $(RNG_OBJS) $(OBJ)/plt/plt.o $(OBJ)/rng_zig_layers_gen.o \
+			$(TEST_OBJS)
 DEPS := $(ALL_OBJS:.o=.d)
 
 OBJ_DIRS := $(sort $(dir $(ALL_OBJS)))
 BUILD_DIRS := $(sort $(OBJ_DIRS) $(BIN)/)
 
 all: $(BINS)
+
+test: $(TEST_BIN)
+	@"$(call shellpath,$<)" $(TEST_ARGS)
 
 run: $(BIN)/main$(EXEEXT)
 	@"$(call shellpath,$<)"
@@ -79,21 +87,25 @@ $(BIN)/main$(EXEEXT): $(OBJ)/main.o $(OBJ)/plt/plt.o $(RNG_OBJS)
 $(BIN)/benchmark$(EXEEXT): $(OBJ)/benchmark.o $(OBJ)/plt/plt.o $(RNG_OBJS)
 $(BIN)/rng_image$(EXEEXT): $(OBJ)/rng_image.o $(RNG_OBJS)
 $(GENERATOR): $(OBJ)/rng_zig_layers_gen.o
+$(TEST_BIN): $(TEST_OBJS) $(RNG_OBJS)
 
 # Order-only prerequisites create directories once during parallel builds.
 # Directory timestamp changes do not trigger recompilation or relinking.
 $(filter-out $(OBJ)/,$(OBJ_DIRS)): | $(OBJ)/
 $(ALL_OBJS): | $(OBJ_DIRS)
-$(BINS) $(GENERATOR): | $(BIN)/
+$(BINS) $(GENERATOR) $(TEST_BIN): | $(BIN)/
 
 $(BUILD_DIRS):
 	@$(call mkdir_p,$@)
 
-$(BINS) $(GENERATOR):
+$(BINS) $(GENERATOR) $(TEST_BIN):
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o "$@"
 
 $(OBJ)/%.o: $(SRC)/%.c Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c "$<" -o "$@"
+
+$(OBJ)/tests/%.o: tests/%.c Makefile
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -I"$(SRC)" -c "$<" -o "$@"
 
 # Normal builds use the committed table. Generate it only if missing.
 ifeq ($(wildcard $(GEN_SRC)),)
@@ -122,4 +134,4 @@ clean-gen: clean
 
 -include $(DEPS)
 
-.PHONY: all run benchmark image open hot regen clean clean-gen
+.PHONY: all test run benchmark image open hot regen clean clean-gen
