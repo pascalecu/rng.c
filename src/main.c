@@ -154,17 +154,18 @@ int main(void) {
   const double excess_kurtosis =
       variance > 0.0 ? fourth_moment / (variance * variance) - 3.0 : NAN;
 
-  printf("range: [%.3f, %.3f]\n", minimum, maximum);
-  printf("mean: %.6f | stddev: %.6f\n", mean, stddev);
-  printf("skewness: %.6f | excess kurtosis: %.6f\n", skewness, excess_kurtosis);
+  printf("Range: [%.3f, %.3f]\n", minimum, maximum);
+  printf("Mean: %.6f | stddev: %.6f\n", mean, stddev);
+  printf("Skewness: %.6f | Excess kurtosis: %.6f\n", skewness, excess_kurtosis);
   puts("Standard normal targets: mean 0, stddev 1, skewness 0, excess kurtosis "
        "0.");
 
   const double ns_per_sample = (double)best_time_ns / (double)count;
   const double throughput = ns_per_sample > 0.0 ? 1000.0 / ns_per_sample : NAN;
 
-  printf("best of %zu: %.3f ns/sample | %.1f million samples/s\n", runs,
-         ns_per_sample, throughput);
+  printf("Generation + buffer writes, best of %zu: "
+         "%.3f ns/sample | %.1f million samples/s\n",
+         runs, ns_per_sample, throughput);
 
   free(buffer);
   return EXIT_SUCCESS;
