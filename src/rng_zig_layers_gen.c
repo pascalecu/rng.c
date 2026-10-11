@@ -1,5 +1,6 @@
 #include "rng/rng.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #define X_LIM 8.0
 #define Y_LIM 1.0
@@ -71,5 +72,10 @@ int main(void) {
   }
   printf("};\n");
 
-  return 0;
+  if (fflush(stdout) == EOF || ferror(stdout)) {
+    fputs("Unable to write generated tables\n", stderr);
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
 }
