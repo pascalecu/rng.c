@@ -28,7 +28,7 @@
 #define IMAGE_STREAM 1
 #endif
 
-#define DEPTH 3 // RGB
+enum { RGB_CHANNELS = 3 };
 
 _Static_assert(WIDTH > 0, "WIDTH must be positive");
 _Static_assert(HEIGHT > 0, "HEIGHT must be positive");
@@ -59,7 +59,7 @@ static int write_ppm(const char *path, const uint8_t *pixels, size_t width,
   }
 
   int failed = fprintf(file, "P6\n%zu %zu\n255\n", width, height) < 0;
-  if (!failed && fwrite(pixels, DEPTH, pixel_count, file) != pixel_count) {
+  if (!failed && fwrite(pixels, RGB_CHANNELS, pixel_count, file) != pixel_count) {
     failed = 1;
   }
 
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
   }
 
   const size_t pixel_count = width * height;
-  if (pixel_count > SIZE_MAX / DEPTH) {
+  if (pixel_count > SIZE_MAX / RGB_CHANNELS) {
     fputs("Image buffer size would overflow\n", stderr);
     return EXIT_FAILURE;
   }
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  uint8_t *pix_buffer = calloc(pixel_count, DEPTH);
+  uint8_t *pix_buffer = calloc(pixel_count, RGB_CHANNELS);
   if (pix_buffer == NULL) {
     fputs("Unable to allocate the pixel buffer\n", stderr);
     return EXIT_FAILURE;
@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
   /* Unselected pixels remain black; later updates replace earlier colours. */
   for (size_t i = 0; i < samples; ++i) {
     const size_t pixel_ix = random_below((uint32_t)pixel_count);
-    uint8_t *pixel = &pix_buffer[pixel_ix * DEPTH];
+    uint8_t *pixel = &pix_buffer[pixel_ix * RGB_CHANNELS];
 
     const uint32_t color = (uint32_t)RNG_FUN;
 
