@@ -50,7 +50,39 @@ static uint32_t random_below(uint32_t bound) {
   }
 }
 
-int main(void) {
+static int write_ppm(const char *path, const uint8_t *pixels, size_t width,
+                     size_t height, size_t pixel_count) {
+  FILE *file = fopen(path, "wb");
+  if (file == NULL) {
+    perror(path);
+    return EXIT_FAILURE;
+  }
+
+  int failed = fprintf(file, "P6\n%zu %zu\n255\n", width, height) < 0;
+  if (!failed && fwrite(pixels, DEPTH, pixel_count, file) != pixel_count) {
+    failed = 1;
+  }
+
+  /* Closing also checks for errors flushing buffered output. */
+  if (fclose(file) != 0) {
+    failed = 1;
+  }
+
+  if (failed) {
+    fprintf(stderr, "Unable to write the complete image to %s\n", path);
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
+}
+
+int main(int argc, char **argv) {
+  if (argc > 2) {
+    fprintf(stderr, "Usage: %s [output.ppm]\n", argv[0]);
+    return EXIT_FAILURE;
+  }
+
+  const char *path = argc == 2 ? argv[1] : "image.ppm";
   const size_t width = (size_t)WIDTH;
   const size_t height = (size_t)HEIGHT;
   const size_t samples = (size_t)SAMPLE_COUNT;
@@ -93,19 +125,13 @@ int main(void) {
   }
 
   // Write a PPM image
-  FILE *fp = fopen("image.ppm", "wb");
-  if (fp == NULL) {
-    fprintf(stderr, "shit hit the fan :/");
-    free(pix_buffer);
-    return EXIT_FAILURE;
-  }
-  fprintf(fp, "P6\n");
-  fprintf(fp, "%zu %zu\n", width, height);
-  fprintf(fp, "255\n");
-  size_t pixels_written = fwrite(pix_buffer, DEPTH, pixel_count, fp);
-  printf("Wrote %zu pixels\n", pixels_written);
-  fclose(fp);
-
+  const int status = write_ppm(path, pix_buffer, width, height, pixel_count);
   free(pix_buffer);
-  return EXIT_SUCCESS;
+
+  if (status == EXIT_SUCCESS) {
+    printf("Wrote %zu x %zu RGB pixels to %s (%zu random pixel updates)\n",
+           width, height, path, samples);
+  }
+
+  return status;
 }
