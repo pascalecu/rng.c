@@ -1,5 +1,7 @@
 #include "rng/rng.h"
-#include <stdint.h>
+
+#include <inttypes.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -146,6 +148,8 @@ int main(int argc, char **argv) {
   if (status == EXIT_SUCCESS) {
     printf("Wrote %zu x %zu RGB pixels to %s (%zu random pixel updates)\n",
            width, height, path, samples);
+    printf("PCG seed: %" PRIu64 " | stream: %" PRIu64 "\n",
+           (uint64_t)IMAGE_SEED, (uint64_t)IMAGE_STREAM);
   }
 
   return status;
