@@ -12,6 +12,13 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #ifndef SAMPLE_COUNT
 #define SAMPLE_COUNT 10000000
 #endif
@@ -52,6 +59,10 @@ static void fill_samples(float *buffer, size_t count) {
 }
 
 int main(void) {
+#ifdef _WIN32
+  SetConsoleOutputCP(CP_UTF8);
+#endif
+
   const size_t count = (size_t)SAMPLE_COUNT;
   const size_t runs = (size_t)BEST_OF_N;
 
