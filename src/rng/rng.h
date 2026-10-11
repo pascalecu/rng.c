@@ -127,20 +127,16 @@ static inline uint32_t rng_bounded(uint32_t bound) {
 static inline uint32_t rng_u(void) { return pcg32_random_r(&pcg32_global); }
 
 /**
- * Generate a uniform value in [0, 1).
- *
- * On binary floating-point implementations with at least 24 bits of precision,
- * the result is one of 2^24 equally spaced values: k / 2^24, where 0 ≤ k <
- * 2^24.
- *
- * Zero is possible; one is excluded. This samples a uniform grid, rather than
- * every representable float in the interval.
- *
- * Advances the global generator by one step.
- */
-static inline float rng_f(void) {
-  return (pcg32_random_r(&pcg32_global) >> 8) * 0x1.0p-24f;
++ * Generate a uniform value in [0, 1) from initialized caller-owned state.
++ * Uses one draw and a grid of 2^24 values on binary32 implementations.
++ * rng must not be NULL; access to shared state requires synchronization.
++ */
+static inline float rng_f_r(pcg32_random_t *rng) {
+  return (pcg32_random_r(rng) >> 8) * 0x1.0p-24f;
 }
+
+/** Generate a uniform value in [0, 1) using the shared global generator. */
+static inline float rng_f(void) { return rng_f_r(&pcg32_global); }
 
 typedef union {
   float f;
@@ -150,28 +146,22 @@ typedef union {
 #define RNG_ZIG_LAY_MASK ((1u << RNG_ZIG_LAY_BITS) - 1)
 
 /**
- * Generate an approximately standard normal value.
- *
- * Uses rejection sampling with the generated layer tables. The current tables
- * cap the sampled magnitude at 8, so this does not reproduce the unbounded
- * tails of an exact normal distribution.
- *
- * Consumes a variable number of values from the global generator. Exact
- * floating-point results can depend on the compiler and math library.
- *
- * The current sign-bit implementation assumes IEEE 754 binary32 floats.
+ * Generate an approximately standard normal value from caller-owned state. Uses
+ * a variable number of draws. The current tables cap the magnitude at 8, and
+ * the sign-bit implementation assumes IEEE 754 binary32 floats. rng must be
+ * initialized and non-NULL; sharing it requires synchronization.
  */
-static inline float rng_norm(void) {
+static inline float rng_norm_r(pcg32_random_t *rng) {
   Bits x;
   for (;;) {
-    uint32_t roll = pcg32_random_r(&pcg32_global);
+    uint32_t roll = pcg32_random_r(rng);
 
     uint32_t lay_ix = (roll >> 1) & RNG_ZIG_LAY_MASK;
     x.f = (roll >> 9) * 0x1.0p-23f * lay_xs[lay_ix];
 
     if (x.f > lay_xs[lay_ix + 1]) {
       float lay_h = lay_ys[lay_ix + 1] - lay_ys[lay_ix];
-      float y = lay_ys[lay_ix] + rng_f() * lay_h;
+      float y = lay_ys[lay_ix] + rng_f_r(rng) * lay_h;
 
       if (y > prob_dens(x.f)) {
         continue; // Reject
@@ -182,6 +172,9 @@ static inline float rng_norm(void) {
     return x.f;
   }
 }
+
+/** Generate an approximately standard normal value using the global generator. */
+static inline float rng_norm(void) { return rng_norm_r(&pcg32_global); }
 
 /**
  * Generate a rough normal approximation by summing 12 uniform values.
