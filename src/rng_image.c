@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define RNG_FUN rng_u()
 
@@ -37,15 +36,16 @@ int main(void) {
   double rand_max_inv = 1.0 / (UINT32_MAX + 1.0);
   for (size_t i = 0; i < SAMPLE_COUNT; ++i) {
     uint32_t roll_a = RNG_FUN << 1;
-    uint32_t roll_b = RNG_FUN << 1;
 
     size_t pixel_ix = roll_a * rand_max_inv * pixel_count;
     uint8_t *pixel = &pix_buffer[pixel_ix * DEPTH];
 
-    double pixel_val = roll_b * rand_max_inv * 1.2 - 0.1;
-    uint32_t pixel_col = pixel_val * (1 << 24);
+    const uint32_t color = (uint32_t)RNG_FUN;
 
-    memcpy(pixel, &pixel_col, DEPTH);
+    /* PPM stores red, green, and blue bytes in that order. */
+    pixel[0] = (uint8_t)(color >> 24);
+    pixel[1] = (uint8_t)(color >> 16);
+    pixel[2] = (uint8_t)(color >> 8);
   }
 
   // Write a PPM image
