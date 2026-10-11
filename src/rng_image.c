@@ -11,6 +11,18 @@
 #define HEIGHT 540
 #define DEPTH 3 // RGB
 
+/* bound must be positive. Reject the incomplete interval to avoid bias. */
+static uint32_t random_below(uint32_t bound) {
+  const uint32_t threshold = (UINT32_C(0) - bound) % bound;
+
+  for (;;) {
+    const uint32_t value = (uint32_t)RNG_FUN;
+    if (value >= threshold) {
+      return value % bound;
+    }
+  }
+}
+
 int main(void) {
   const size_t width = (size_t)WIDTH;
   const size_t height = (size_t)HEIGHT;
@@ -26,6 +38,11 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
+  if (pixel_count > UINT32_MAX) {
+    fputs("Image has too many pixels for bounded sampling\n", stderr);
+    return EXIT_FAILURE;
+  }
+
   uint8_t *pix_buffer = calloc(pixel_count, DEPTH);
   if (pix_buffer == NULL) {
     fputs("Unable to allocate the pixel buffer\n", stderr);
@@ -33,11 +50,8 @@ int main(void) {
   }
 
   // Generate random pixels
-  double rand_max_inv = 1.0 / (UINT32_MAX + 1.0);
   for (size_t i = 0; i < SAMPLE_COUNT; ++i) {
-    uint32_t roll_a = RNG_FUN << 1;
-
-    size_t pixel_ix = roll_a * rand_max_inv * pixel_count;
+    const size_t pixel_ix = random_below((uint32_t)pixel_count);
     uint8_t *pixel = &pix_buffer[pixel_ix * DEPTH];
 
     const uint32_t color = (uint32_t)RNG_FUN;
