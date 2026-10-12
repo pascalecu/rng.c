@@ -27,11 +27,18 @@ static pcg32_random_t saved_global;
 __attribute__((format(printf, 1, 2)))
 #endif
 static void set_context(const char *format, ...) {
+  assert(format != NULL);
+
   va_list args;
   va_start(args, format);
-  vsnprintf(context, sizeof(context), format, args);
+  const int written = vsnprintf(context, sizeof(context), format, args);
   va_end(args);
-  sample_index = SIZE_MAX;
+
+  if (written < 0) {
+    context[0] = '\0';
+  }
+
+  /* Longer messages are intentionally truncated by vsnprintf(). */
 }
 
 static const char *failure(const char *expression) {
