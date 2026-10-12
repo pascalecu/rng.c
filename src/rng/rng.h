@@ -156,11 +156,6 @@ static inline float rng_f_r(pcg32_random_t *rng) {
 /** Generate a uniform value in [0, 1) using the shared global generator. */
 static inline float rng_f(void) { return rng_f_r(&pcg32_global); }
 
-typedef union {
-  float f;
-  uint32_t u;
-} Bits;
-
 #define RNG_ZIG_LAY_MASK ((1u << RNG_ZIG_LAY_BITS) - 1)
 
 /**
@@ -170,25 +165,22 @@ typedef union {
  * initialized and non-NULL; sharing it requires synchronization.
  */
 static inline float rng_norm_r(pcg32_random_t *rng) {
-  Bits x;
-
   for (;;) {
-    uint32_t roll = pcg32_random_r(rng);
+    const uint32_t roll = pcg32_random_r(rng);
+    const uint32_t lay_ix = (roll >> 1u) & RNG_ZIG_LAY_MASK;
+    const float x = (float)(roll >> 9u) * 0x1.0p-23f * lay_xs[lay_ix];
 
-    uint32_t lay_ix = (roll >> 1) & RNG_ZIG_LAY_MASK;
-    x.f = (float)(roll >> 9) * 0x1.0p-23f * lay_xs[lay_ix];
+    if (x > lay_xs[lay_ix + 1u]) {
+      const float lay_h = lay_ys[lay_ix + 1u] - lay_ys[lay_ix];
+      const float y = lay_ys[lay_ix] + rng_f_r(rng) * lay_h;
 
-    if (x.f > lay_xs[lay_ix + 1]) {
-      float lay_h = lay_ys[lay_ix + 1] - lay_ys[lay_ix];
-      float y = lay_ys[lay_ix] + rng_f_r(rng) * lay_h;
-
-      if (y > prob_dens(x.f)) {
-        continue; // Reject
+      if (y > prob_dens(x)) {
+        continue;
       }
     }
 
-    x.u |= roll << 31;
-    return x.f;
+    /* Bit 0 supplies the sign; copysignf also preserves negative zero. */
+    return copysignf(x, (roll & UINT32_C(1)) != 0 ? -1.0f : 1.0f);
   }
 }
 
