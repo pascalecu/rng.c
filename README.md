@@ -17,10 +17,12 @@ int main(void) {
   rng_seed(42, 1);
 
   const uint32_t integer = rng_u();
+  const uint32_t die = rng_bounded(6) + 1;
   const float uniform = rng_f();
   const float normal = rng_norm();
 
   printf("integer: %" PRIu32 "\n", integer);
+  printf("die:     %" PRIu32 "\n", die);
   printf("uniform: %.6f\n", uniform);
   printf("normal:  %.6f\n", normal);
 
@@ -34,6 +36,7 @@ Core API:
 | --- | --- | --- |
 | Initialize with a seed and stream | `rng_seed(seed, stream)` | `pcg32_srandom_r(&rng, seed, stream)` |
 | Generate a `uint32_t` | `rng_u()` | `pcg32_random_r(&rng)` |
+| Generate a `uint32_t` in `[0, bound)` | `rng_bounded(bound)` | `rng_bounded_r(&rng, bound)` |
 | Generate a uniform `float` in `[0, 1)` | `rng_f()` | `rng_f_r(&rng)` |
 | Generate an approximately standard normal `float` | `rng_norm()` | `rng_norm_r(&rng)` |
 
@@ -52,6 +55,7 @@ pcg32_random_t rng;
 pcg32_srandom_r(&rng, 42, 1);
 
 const uint32_t integer = pcg32_random_r(&rng);
+const uint32_t die = rng_bounded_r(&rng, 6) + 1;
 const float uniform = rng_f_r(&rng);
 const float normal = rng_norm_r(&rng);
 ```
@@ -62,6 +66,12 @@ Separate state objects can be used concurrently without changing the global
 generator. Copy a state object to save and later resume its sequence.
 
 ### Sampling details
+
+Bounded integer sampling requires a positive `uint32_t` bound. It uses rejection
+sampling to avoid modulo bias and consumes one or more PCG32 draws, including
+one draw when the bound is 1. For example, `rng_bounded(6) + 1` generates a
+value from 1 through 6. Passing zero violates the API's precondition; it is not
+a supported input, even when assertions are disabled.
 
 Uniform sampling consumes one PCG32 draw and uses a grid of $2^{24}$ values on
 binary32 implementations. It can return zero and never returns one.
@@ -118,7 +128,7 @@ cc -std=c17 -O3 -Isrc example.c src/rng/rng.c src/rng/rng_zig_layers.c -lm -o ex
 
 ## Tests
 
-Run all 44 named regression tests:
+Run all 52 named regression tests:
 
 ```sh
 make test
@@ -134,6 +144,7 @@ cases:
 
 ```sh
 make test TEST_ARGS="-v -s normal_tests"
+make test TEST_ARGS="-v -s bounded_tests"
 make test TEST_ARGS="-v -s smoke_tests"
 make test TEST_ARGS="-v -t rejection"
 make test TEST_ARGS="-l"
@@ -148,8 +159,10 @@ mingw32-make.exe test TEST_ARGS="-v -s normal_tests"
 Coverage includes upstream PCG reference vectors, seed boundaries, all output
 rotations, state wraparound, stream selection, reseeding, snapshots, interleaved
 states, and every tested seed/stream combination for the global wrappers.
-Sampling tests cover uniform bounds and draw counts, every normal layer and
-sign, rejection paths, tail limits, and table density and area invariants.
+Sampling tests cover bounded-integer limits, powers of two, forced rejection,
+threshold equality, and global/local state agreement; uniform bounds and draw
+counts; every normal layer and sign; rejection paths; tail limits; and table
+density and area invariants.
 
 Each named case reports independently and restores the global generator when it
 finishes. Loop failures identify the input or sample; value and state
@@ -159,9 +172,9 @@ exits with failure; listing does not run tests.
 Fixed-seed distribution smoke tests use broad tolerances to catch gross errors.
 They do not establish statistical quality or independence.
 
-Fixture sources and test details are documented in
-[tests/README.md](tests/README.md). The vendored version and license are
-recorded in [tests/vendor/greatest/README.md](tests/vendor/greatest/README.md).
+Fixture sources, test details, and the greatest version and license are
+documented in [tests/README.md](tests/README.md). The vendored header is
+[tests/greatest.h](tests/greatest.h).
 
 ## Normal distribution demo
 
@@ -321,4 +334,4 @@ C](https://img.youtube.com/vi/qa83_KrkVIM/mqdefault.jpg)](https://youtu.be/qa83_
 
 The library is licensed under the [MIT License](LICENSE). PCG attribution is
 retained in the source files. The vendored greatest test runner uses the ISC
-license; its notice is retained in `greatest.h`.
+license; its notice is retained in [tests/greatest.h](tests/greatest.h).
