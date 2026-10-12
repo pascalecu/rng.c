@@ -17,16 +17,22 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define PCG32_INITIALIZER {0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL}
+pcg32_random_t pcg32_global = {
+    .state = UINT64_C(0x853c49e6748fea9b),
+    .inc = UINT64_C(0xda3e39cb94b95bdb),
+};
 
-pcg32_random_t pcg32_global = PCG32_INITIALIZER;
+void pcg32_srandom_r(pcg32_random_t *rng, uint64_t initstate,
+                     uint64_t initseq) {
+  assert(rng != NULL);
 
-void pcg32_srandom_r(pcg32_random_t *rng, uint64_t initstate, uint64_t initseq) {
-  rng->state = 0U;
-  rng->inc = (initseq << 1u) | 1u;
-  pcg32_random_r(rng);
+  rng->state = UINT64_C(0);
+  rng->inc = (initseq << 1u) | UINT64_C(1);
+
+  /* Mix the stream selector, then the seed, into the initial state. */
+  (void)pcg32_random_r(rng);
   rng->state += initstate;
-  pcg32_random_r(rng);
+  (void)pcg32_random_r(rng);
 }
 
 void rng_seed(uint64_t seed, uint64_t seq) {
