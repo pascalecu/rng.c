@@ -60,9 +60,10 @@ void pcg32_srandom_r(pcg32_random_t *rng, uint64_t initstate, uint64_t initseq);
  * @param seed Seed value; all 64 bits are significant.
  * @param seq  Stream selector; only the low 63 bits are significant.
  *
- * Reusing the same arguments reproduces the same integer sequence. All rng_*
- * sampling functions advance this shared state, so changing their call order
- * changes subsequent results.
+ * Reusing the same arguments reproduces the same integer sequence. rng_u(),
+ * rng_bounded(), rng_f(), rng_norm(), and rng_norm_old() advance this shared
+ * state, so changing their call order changes subsequent results. Functions
+ * that take a generator pointer advance only the supplied generator.
  *
  * Calls that access the global generator require synchronization when used
  * concurrently.
@@ -79,12 +80,15 @@ void rng_seed(uint64_t seed, uint64_t seq);
  */
 static inline uint32_t pcg32_random_r(pcg32_random_t *rng) {
   uint64_t oldstate = rng->state;
+
   // LCG step (pcg_setseq_64_step_r)
   rng->state = oldstate * 6364136223846793005ULL + (rng->inc | 1);
+
   // XSH RR output (pcg_output_xsh_rr_64_32), fed the old state so the step and
   // the output function can overlap
   uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   uint32_t rot = oldstate >> 59u;
+
   return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 }
 
@@ -93,8 +97,10 @@ static inline uint32_t pcg32_random_r(pcg32_random_t *rng) {
  *
  * @param rng   Initialized generator; must not be NULL.
  * @param bound Exclusive upper bound; must be positive.
+ * @return A value less than bound.
  *
- * Rejection sampling avoids modulo bias and may consume multiple draws.
+ * Advances only the supplied generator, consuming one or more PCG32 draws.
+ * Rejection sampling avoids modulo bias. A bound of 1 still consumes one draw.
  */
 static inline uint32_t rng_bounded_r(pcg32_random_t *rng, uint32_t bound) {
   assert(bound > 0);
@@ -113,7 +119,8 @@ static inline uint32_t rng_bounded_r(pcg32_random_t *rng, uint32_t bound) {
 /**
  * Generate a uniformly distributed integer in [0, bound).
  *
- * Uses the global generator. bound must be positive.
+ * Uses the global generator and consumes one or more PCG32 draws. bound must be
+ * positive; a bound of 1 still consumes one draw.
  */
 static inline uint32_t rng_bounded(uint32_t bound) {
   return rng_bounded_r(&pcg32_global, bound);
@@ -127,10 +134,10 @@ static inline uint32_t rng_bounded(uint32_t bound) {
 static inline uint32_t rng_u(void) { return pcg32_random_r(&pcg32_global); }
 
 /**
-+ * Generate a uniform value in [0, 1) from initialized caller-owned state.
-+ * Uses one draw and a grid of 2^24 values on binary32 implementations.
-+ * rng must not be NULL; access to shared state requires synchronization.
-+ */
+ * Generate a uniform value in [0, 1) from initialized caller-owned state. Uses
+ * one draw and a grid of 2^24 values on binary32 implementations. rng must not
+ * be NULL; access to the same generator requires synchronization.
+ */
 static inline float rng_f_r(pcg32_random_t *rng) {
   return (pcg32_random_r(rng) >> 8) * 0x1.0p-24f;
 }
@@ -153,6 +160,7 @@ typedef union {
  */
 static inline float rng_norm_r(pcg32_random_t *rng) {
   Bits x;
+
   for (;;) {
     uint32_t roll = pcg32_random_r(rng);
 
@@ -173,7 +181,8 @@ static inline float rng_norm_r(pcg32_random_t *rng) {
   }
 }
 
-/** Generate an approximately standard normal value using the global generator. */
+/** Generate an approximately standard normal value using the global generator.
+ * */
 static inline float rng_norm(void) { return rng_norm_r(&pcg32_global); }
 
 /**
