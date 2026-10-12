@@ -23,6 +23,9 @@ static char failure_text[512];
 static size_t sample_index;
 static pcg32_random_t saved_global;
 
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((format(printf, 1, 2)))
+#endif
 static void set_context(const char *format, ...) {
   va_list args;
   va_start(args, format);
@@ -522,7 +525,7 @@ TEST test_uniform_distribution_smoke(void) {
 
   for (size_t i = 0; i < count; ++i) {
     sample_index = i;
-    const double value = rng_f_r(&local);
+    const double value = (double)rng_f_r(&local);
     EXPECT(value >= 0.0 && value < 1.0);
     ++bins[(size_t)(value * 16.0)];
     sum += value;
@@ -684,7 +687,7 @@ TEST test_normal_distribution_smoke(uint64_t seed, uint64_t stream) {
 
   for (size_t i = 0; i < count; ++i) {
     sample_index = i;
-    const double value = rng_norm_r(&local);
+    const double value = (double)rng_norm_r(&local);
     EXPECT(isfinite(value));
     const double squared = value * value;
     sum += value;
@@ -764,7 +767,7 @@ TEST test_table_density(void) {
 
   for (size_t i = 0; i <= layers; ++i) {
     sample_index = i;
-    const double x = lay_xs[i];
+    const double x = (double)lay_xs[i];
     const double density = exp(-0.5 * x * x);
     EXPECT_NEAR(density, (double)lay_ys[i], 2e-7);
   }
@@ -773,11 +776,11 @@ TEST test_table_density(void) {
 
 TEST test_table_areas(void) {
   const size_t layers = (size_t)1 << RNG_ZIG_LAY_BITS;
-  const double expected = (double)lay_xs[0] * lay_ys[1];
+  const double expected = (double)lay_xs[0] * (double)lay_ys[1];
 
   for (size_t i = 0; i < layers; ++i) {
     sample_index = i;
-    const double height = (double)lay_ys[i + 1] - lay_ys[i];
+    const double height = (double)lay_ys[i + 1] - (double)lay_ys[i];
     const double area = (double)lay_xs[i] * height;
     EXPECT(area > 0.0);
     EXPECT_NEAR(expected, area, 5e-7);
