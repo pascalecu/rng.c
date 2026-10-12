@@ -15,12 +15,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <math.h>
-#include <stdint.h>
-#include <stddef.h>
 #include <assert.h>
+#include <float.h>
+#include <math.h>
+#include <stddef.h>
+#include <stdint.h>
 
+/* Deterministic pseudorandom generation; not suitable for cryptography. */
 #define RNG_ZIG_LAY_BITS 8
+
+_Static_assert(FLT_RADIX == 2 && FLT_MANT_DIG >= 24,
+               "rng_f requires binary floats with at least 24 precision bits");
 
 /* Bits 1-8 select the layer; bits 9-31 select the sample position. */
 _Static_assert(RNG_ZIG_LAY_BITS == 8,
