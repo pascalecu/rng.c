@@ -103,12 +103,12 @@ int main(void) {
   }
 
   double sum = 0.0;
-  double minimum = buffer[0];
-  double maximum = buffer[0];
+  double minimum = (double)buffer[0];
+  double maximum = (double)buffer[0];
 
   // Stats for nerds
   for (size_t i = 0; i < count; ++i) {
-    const double value = buffer[i];
+    const double value = (double)buffer[i];
 
     if (!isfinite(value)) {
       fprintf(stderr, "Nonfinite sample at index %zu: %g\n", i, value);
@@ -150,9 +150,9 @@ int main(void) {
   const double fourth_moment = fourth_sum / (double)count;
 
   const double skewness =
-      variance > 0.0 ? third_moment / (variance * stddev) : NAN;
+      variance > 0.0 ? third_moment / (variance * stddev) : (double)NAN;
   const double excess_kurtosis =
-      variance > 0.0 ? fourth_moment / (variance * variance) - 3.0 : NAN;
+      variance > 0.0 ? fourth_moment / (variance * variance) - 3.0 : (double)NAN;
 
   printf("Range: [%.3f, %.3f]\n", minimum, maximum);
   printf("Mean: %.6f | stddev: %.6f\n", mean, stddev);
@@ -161,7 +161,7 @@ int main(void) {
        "0.");
 
   const double ns_per_sample = (double)best_time_ns / (double)count;
-  const double throughput = ns_per_sample > 0.0 ? 1000.0 / ns_per_sample : NAN;
+  const double throughput = ns_per_sample > 0.0 ? 1000.0 / ns_per_sample : (double)NAN;
 
   printf("Generation + buffer writes, best of %zu: "
          "%.3f ns/sample | %.1f million samples/s\n",

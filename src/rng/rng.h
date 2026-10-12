@@ -86,8 +86,8 @@ static inline uint32_t pcg32_random_r(pcg32_random_t *rng) {
 
   // XSH RR output (pcg_output_xsh_rr_64_32), fed the old state so the step and
   // the output function can overlap
-  uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
-  uint32_t rot = oldstate >> 59u;
+  uint32_t xorshifted = (uint32_t)(((oldstate >> 18u) ^ oldstate) >> 27u);
+  uint32_t rot = (uint32_t)(oldstate >> 59u);
 
   return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 }
@@ -139,7 +139,7 @@ static inline uint32_t rng_u(void) { return pcg32_random_r(&pcg32_global); }
  * be NULL; access to the same generator requires synchronization.
  */
 static inline float rng_f_r(pcg32_random_t *rng) {
-  return (pcg32_random_r(rng) >> 8) * 0x1.0p-24f;
+  return (float)(pcg32_random_r(rng) >> 8) * 0x1.0p-24f;
 }
 
 /** Generate a uniform value in [0, 1) using the shared global generator. */
@@ -165,7 +165,7 @@ static inline float rng_norm_r(pcg32_random_t *rng) {
     uint32_t roll = pcg32_random_r(rng);
 
     uint32_t lay_ix = (roll >> 1) & RNG_ZIG_LAY_MASK;
-    x.f = (roll >> 9) * 0x1.0p-23f * lay_xs[lay_ix];
+    x.f = (float)(roll >> 9) * 0x1.0p-23f * lay_xs[lay_ix];
 
     if (x.f > lay_xs[lay_ix + 1]) {
       float lay_h = lay_ys[lay_ix + 1] - lay_ys[lay_ix];

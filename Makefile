@@ -3,7 +3,7 @@
 
 CC ?= cc
 CPPFLAGS ?=
-CFLAGS ?= -std=c17 -O3 -Wall -Wextra
+CFLAGS ?= -std=c17 -O2
 LDFLAGS ?=
 DEPFLAGS ?= -MMD -MP
 TEST_ARGS ?= -v
@@ -31,6 +31,45 @@ rm_file = $(RM) "$(1)"
 rm_tree = $(RM) -r "$(1)"
 endif
 
+# Probe the compiler behind CC, including wrappers and cross-compiler names.
+# Only preprocessing is required; no target executable is run.
+ifeq ($(OS),Windows_NT)
+COMPILER_NULL := NUL
+else
+COMPILER_NULL := /dev/null
+endif
+
+CC_MACROS := $(shell $(CC) -dM -E -x c - < $(COMPILER_NULL))
+CC_FAMILY := unknown
+
+# Clang also defines __GNUC__ in GNU-compatible modes, so check it first.
+ifneq ($(findstring __clang__,$(CC_MACROS)),)
+CC_FAMILY := clang
+else ifneq ($(findstring __GNUC__,$(CC_MACROS)),)
+CC_FAMILY := gcc
+endif
+
+WARNFLAGS := -Wall -Wextra -Wpedantic -Werror -pedantic-errors \
+             -Wconversion -Wsign-conversion -Wfloat-conversion \
+             -Wdouble-promotion -Wshadow -Wformat=2 -Wundef \
+             -Wstrict-prototypes -Wmissing-prototypes \
+             -Wcast-align -Wcast-qual -Wcast-function-type \
+             -Wpointer-arith -Wwrite-strings \
+             -Wswitch-enum -Wswitch-default \
+             -Wvla -Walloca -Wbad-function-cast \
+             -Wnull-dereference -Wmissing-include-dirs -Wunused-macros
+
+ifeq ($(CC_FAMILY),gcc)
+WARNFLAGS += -Warray-bounds=2 -Wformat-overflow=2 -Wformat-truncation=2 \
+             -Wcast-align=strict -Wduplicated-cond -Wduplicated-branches \
+             -Wlogical-op -Warith-conversion \
+             -Wold-style-definition -Wredundant-decls
+else ifeq ($(CC_FAMILY),clang)
+WARNFLAGS += -Wcomma -Wconditional-uninitialized \
+             -Wmissing-variable-declarations -Wreserved-identifier \
+             -Wunreachable-code-aggressive -Wdocumentation
+endif
+
 SRC := src
 OBJ := obj
 BIN := bin
@@ -49,13 +88,19 @@ TEST_OBJS := $(OBJ)/tests/test_rng.o
 
 ALL_OBJS := $(addprefix $(OBJ)/,$(addsuffix .o,$(PROGRAMS))) \
             $(RNG_OBJS) $(OBJ)/plt/plt.o $(OBJ)/rng_zig_layers_gen.o \
-			$(TEST_OBJS)
+            $(TEST_OBJS)
 DEPS := $(ALL_OBJS:.o=.d)
 
 OBJ_DIRS := $(sort $(dir $(ALL_OBJS)))
 BUILD_DIRS := $(sort $(OBJ_DIRS) $(BIN)/)
 
 all: $(BINS)
+
+print-config:
+	@echo "Compiler: $(CC) ($(CC_FAMILY))"
+	@echo "CPPFLAGS: $(CPPFLAGS)"
+	@echo "CFLAGS: $(CFLAGS)"
+	@echo "WARNFLAGS: $(WARNFLAGS)"
 
 test: $(TEST_BIN)
 	@"$(call shellpath,$<)" $(TEST_ARGS)
@@ -102,10 +147,10 @@ $(BINS) $(GENERATOR) $(TEST_BIN):
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o "$@"
 
 $(OBJ)/%.o: $(SRC)/%.c Makefile
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -c "$<" -o "$@"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(DEPFLAGS) -c "$<" -o "$@"
 
 $(OBJ)/tests/%.o: tests/%.c Makefile
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(DEPFLAGS) -I"$(SRC)" -c "$<" -o "$@"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(DEPFLAGS) -I"$(SRC)" -c "$<" -o "$@"
 
 # Normal builds use the committed table. Generate it only if missing.
 ifeq ($(wildcard $(GEN_SRC)),)
@@ -134,4 +179,4 @@ clean-gen: clean
 
 -include $(DEPS)
 
-.PHONY: all test run benchmark image open hot regen clean clean-gen
+.PHONY: all print-config test run benchmark image open hot regen clean clean-gen

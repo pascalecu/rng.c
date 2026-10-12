@@ -10,10 +10,10 @@ void plt_hist(float *data, size_t len, size_t rows, size_t cols) {
   }
 
   // Get the x range
-  double x_min = data[0], x_max = data[0];
+  double x_min = (double)data[0], x_max = (double)data[0];
 
   for (size_t i = 0; i < len; ++i) {
-    const double value = data[i];
+    const double value = (double)data[i];
 
     if (!isfinite(value)) {
       fputs("Histogram data must be finite\n", stderr);
@@ -61,7 +61,7 @@ void plt_hist(float *data, size_t len, size_t rows, size_t cols) {
   }
 
   // clang-format off
-  char *blocks[] = {
+  const char *blocks[] = {
     " ",
     "\u2581",
     "\u2582",

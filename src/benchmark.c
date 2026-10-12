@@ -6,6 +6,7 @@
 #include "plt/plt.h"
 #include "rng/rng.h"
 
+#include <float.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stddef.h>
@@ -149,10 +150,11 @@ static void report(const benchmark *entry, const benchmark_result *result,
                             ? times[runs / 2]
                             : (times[runs / 2 - 1] + times[runs / 2]) / 2.0;
 
-  const double throughput = median > 0.0 ? 1000.0 / median : NAN;
+  const double throughput = median > 0.0 ? 1000.0 / median : (double)NAN;
 
-  char stddev_text[32] = "N/A";
-  char cv_text[32] = "N/A";
+  /* Allow for integer digits, sign, decimal point, fraction and terminator. */
+  char stddev_text[DBL_MAX_10_EXP + 8] = "N/A";
+  char cv_text[DBL_MAX_10_EXP + 8] = "N/A";
 
   if (runs > 1) {
     const double stddev = sqrt(fmax(m2, 0.0) / (double)(runs - 1));
