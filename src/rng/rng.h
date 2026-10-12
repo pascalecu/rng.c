@@ -84,17 +84,23 @@ void rng_seed(uint64_t seed, uint64_t seq);
  * Advances only the supplied generator by one step.
  */
 static inline uint32_t pcg32_random_r(pcg32_random_t *rng) {
-  uint64_t oldstate = rng->state;
+  assert(rng != NULL);
 
-  // LCG step (pcg_setseq_64_step_r)
-  rng->state = oldstate * 6364136223846793005ULL + (rng->inc | 1);
+  const uint64_t oldstate = rng->state;
 
-  // XSH RR output (pcg_output_xsh_rr_64_32), fed the old state so the step and
-  // the output function can overlap
-  uint32_t xorshifted = (uint32_t)(((oldstate >> 18u) ^ oldstate) >> 27u);
-  uint32_t rot = (uint32_t)(oldstate >> 59u);
+  /* Advance the LCG using unsigned arithmetic, which wraps by definition. */
+  rng->state =
+      oldstate * UINT64_C(6364136223846793005) + (rng->inc | UINT64_C(1));
 
-  return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+  /*
+   * Derive the output from the old state. Truncation to 32 bits is intentional;
+   * masking the complementary shift keeps both shift counts below 32.
+   */
+  const uint32_t xorshifted = (uint32_t)(((oldstate >> 18u) ^ oldstate) >> 27u);
+  const uint32_t rot = (uint32_t)(oldstate >> 59u);
+
+  return (xorshifted >> rot) |
+         (xorshifted << ((UINT32_C(0) - rot) & UINT32_C(31)));
 }
 
 /**
