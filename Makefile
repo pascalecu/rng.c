@@ -70,9 +70,9 @@ WARNFLAGS += -Wcomma -Wconditional-uninitialized \
              -Wunreachable-code-aggressive -Wdocumentation
 endif
 
-SRC := src
-OBJ := obj
-BIN := bin
+SRC ?= src
+OBJ ?= obj
+BIN ?= bin
 
 PROGRAMS := main benchmark rng_image
 BINS := $(addprefix $(BIN)/,$(addsuffix $(EXEEXT),$(PROGRAMS)))
@@ -93,6 +93,32 @@ DEPS := $(ALL_OBJS:.o=.d)
 
 OBJ_DIRS := $(sort $(dir $(ALL_OBJS)))
 BUILD_DIRS := $(sort $(OBJ_DIRS) $(BIN)/)
+
+# Record effective commands so changing CC or flags rebuilds the right files.
+COMPILE_CONFIG := CC=$(CC) CPPFLAGS=$(CPPFLAGS) CFLAGS=$(CFLAGS) WARNFLAGS=$(WARNFLAGS) DEPFLAGS=$(DEPFLAGS) SRC=$(SRC)
+LINK_CONFIG := CC=$(CC) CFLAGS=$(CFLAGS) LDFLAGS=$(LDFLAGS) LDLIBS=$(LDLIBS)
+
+# GNU make expands recipe functions with -n; keep dry runs read-only.
+DRY_RUN := $(findstring n,$(filter-out --%,$(firstword $(MAKEFLAGS))))
+COMPILE_STAMP := $(OBJ)/.compile-config
+LINK_STAMP := $(OBJ)/.link-config
+
+ifneq ($(strip $(file <$(COMPILE_STAMP))),$(strip $(COMPILE_CONFIG)))
+$(COMPILE_STAMP): FORCE
+endif
+ifneq ($(strip $(file <$(LINK_STAMP))),$(strip $(LINK_CONFIG)))
+$(LINK_STAMP): FORCE
+endif
+
+$(COMPILE_STAMP): | $(OBJ)/
+	$(if $(DRY_RUN),,$(file >$@,$(COMPILE_CONFIG)))
+	@echo Updated compilation configuration.
+
+$(LINK_STAMP): | $(OBJ)/
+	$(if $(DRY_RUN),,$(file >$@,$(LINK_CONFIG)))
+	@echo Updated link configuration.
+
+FORCE:
 
 all: $(BINS)
 
@@ -137,14 +163,15 @@ $(TEST_BIN): $(TEST_OBJS) $(RNG_OBJS)
 # Order-only prerequisites create directories once during parallel builds.
 # Directory timestamp changes do not trigger recompilation or relinking.
 $(filter-out $(OBJ)/,$(OBJ_DIRS)): | $(OBJ)/
-$(ALL_OBJS): | $(OBJ_DIRS)
+.SECONDEXPANSION:
+$(ALL_OBJS): $(COMPILE_STAMP) | $$(@D)/
 $(BINS) $(GENERATOR) $(TEST_BIN): | $(BIN)/
 
 $(BUILD_DIRS):
 	@$(call mkdir_p,$@)
 
-$(BINS) $(GENERATOR) $(TEST_BIN):
-	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o "$@"
+$(BINS) $(GENERATOR) $(TEST_BIN): Makefile $(LINK_STAMP)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(filter %.o,$^) $(LDLIBS) -o "$@"
 
 $(OBJ)/%.o: $(SRC)/%.c Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(DEPFLAGS) -c "$<" -o "$@"
@@ -177,6 +204,14 @@ clean:
 clean-gen: clean
 	$(call rm_file,$(GEN_SRC))
 
+# Cleanup should not load dependencies or regenerate missing sources.
+ifeq ($(strip $(filter-out clean clean-gen,$(MAKECMDGOALS))),)
+ifneq ($(MAKECMDGOALS),)
+SKIP_DEPS := 1
+endif
+endif
+ifneq ($(SKIP_DEPS),1)
 -include $(DEPS)
+endif
 
-.PHONY: all print-config test run benchmark image open hot regen clean clean-gen
+.PHONY: FORCE all print-config test run benchmark image open hot regen clean clean-gen
