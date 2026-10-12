@@ -380,6 +380,95 @@ TEST test_global_wrappers(uint64_t seed, uint64_t stream) {
   PASS();
 }
 
+typedef struct {
+  const char *name;
+  uint32_t bound, value;
+  pcg32_random_t initial, after;
+} bounded_case;
+
+/* Fixed PCG32 words and final states, calculated independently of rng_bounded.
+ * Check exact state advancement as well as the returned value. */
+static const bounded_case bounded_cases[] = {
+    {"one", 1, 0, {1, 1}, {UINT64_C(0x5851f42d4c957f2e), 1}},
+    {"max_zero",
+     UINT32_MAX,
+     0,
+     {UINT64_C(0x07fffe0000000000), 1},
+     {UINT64_C(0x3d01a60000000001), 1}},
+    {"max_rejection",
+     UINT32_MAX,
+     UINT32_C(0xe4c14788),
+     {1, 1},
+     {UINT64_C(0xc0b18ccf4e252d17), 1}},
+    {"one_rejection", 3, 1, {1, 1}, {UINT64_C(0xc0b18ccf4e252d17), 1}},
+    {"two_rejections",
+     UINT32_C(0x80000001),
+     UINT32_C(0x64c14787),
+     {0, 1},
+     {UINT64_C(0xc0b18ccf4e252d17), 1}},
+    {"threshold_equality",
+     UINT32_C(0xedcbaa00),
+     UINT32_C(0x12345600),
+     {UINT64_C(0x0091a29468a51a29), 1},
+     {UINT64_C(0x29a0cd11b2dcf036), 1}},
+};
+
+TEST test_bounded_case(const bounded_case *entry) {
+  set_context("%s, bound=0x%08" PRIx32, entry->name, entry->bound);
+  rng_seed(123, 7);
+  const pcg32_random_t global_before = pcg32_global;
+  pcg32_random_t local = entry->initial;
+
+  EXPECT_U32(entry->value, rng_bounded_r(&local, entry->bound));
+  EXPECT_STATE(entry->after, local);
+  EXPECT_STATE(global_before, pcg32_global);
+
+  pcg32_global = entry->initial;
+  EXPECT_U32(entry->value, rng_bounded(entry->bound));
+  EXPECT_STATE(entry->after, pcg32_global);
+  PASS();
+}
+
+TEST test_bounded_powers_of_two(void) {
+  /* First raw words are 0 and UINT32_MAX; both must consume exactly one draw. */
+  const pcg32_random_t zero_after = {UINT64_C(0x5851f42d4c957f2e), 1};
+  const pcg32_random_t maximum_after = {UINT64_C(0x3d01a60000000001), 1};
+
+  for (unsigned int bit = 1; bit < 32; ++bit) {
+    const uint32_t bound = UINT32_C(1) << bit;
+    set_context("bound=2^%u", bit);
+    pcg32_random_t zero = {1, 1};
+    pcg32_random_t maximum = {UINT64_C(0x07fffe0000000000), 1};
+
+    EXPECT_U32(0, rng_bounded_r(&zero, bound));
+    EXPECT_STATE(zero_after, zero);
+    EXPECT_U32(bound - 1, rng_bounded_r(&maximum, bound));
+    EXPECT_STATE(maximum_after, maximum);
+  }
+  PASS();
+}
+
+TEST test_bounded_ranges_and_wrappers(void) {
+  const uint32_t bounds[] = {1, 2, 3, 256, UINT32_C(0x80000001), UINT32_MAX};
+
+  for (size_t b = 0; b < COUNT_OF(bounds); ++b) {
+    const uint32_t bound = bounds[b];
+    set_context("bound=0x%08" PRIx32, bound);
+    pcg32_random_t local;
+    pcg32_srandom_r(&local, 42, 54);
+    rng_seed(42, 54);
+
+    for (size_t i = 0; i < 1000; ++i) {
+      sample_index = i;
+      const uint32_t value = rng_bounded_r(&local, bound);
+      EXPECT(value < bound);
+      EXPECT_U32(value, rng_bounded(bound));
+      EXPECT_STATE(local, pcg32_global);
+    }
+  }
+  PASS();
+}
+
 TEST test_uniform_values(void) {
   /* These valid states produce raw words 0 and UINT32_MAX, respectively. */
   pcg32_random_t zero = {0, 1};
@@ -738,6 +827,16 @@ SUITE(pcg_tests) {
   }
 }
 
+SUITE(bounded_tests) {
+  isolate_tests();
+  for (size_t i = 0; i < COUNT_OF(bounded_cases); ++i) {
+    greatest_set_test_suffix(bounded_cases[i].name);
+    RUN_TESTp(test_bounded_case, &bounded_cases[i]);
+  }
+  RUN_TEST(test_bounded_powers_of_two);
+  RUN_TEST(test_bounded_ranges_and_wrappers);
+}
+
 SUITE(uniform_tests) {
   isolate_tests();
   RUN_TEST(test_uniform_values);
@@ -778,6 +877,7 @@ GREATEST_MAIN_DEFS();
 int main(int argc, char **argv) {
   GREATEST_MAIN_BEGIN();
   RUN_SUITE(pcg_tests);
+  RUN_SUITE(bounded_tests);
   RUN_SUITE(uniform_tests);
   RUN_SUITE(normal_tests);
   RUN_SUITE(smoke_tests);
